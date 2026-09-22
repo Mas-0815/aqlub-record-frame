@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>アクラブ学年別記録会 フォトフレーム</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: sans-serif;
+    }
+
+    #wrap {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+
+    video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #000;
+    }
+
+    #frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #start {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 30;
+      padding: 16px 28px;
+      border: none;
+      border-radius: 30px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+      background: #0b7dda;
+    }
+
+    #capture {
+      position: absolute;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      z-index: 20;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 5px solid #fff;
+      background: rgba(255,255,255,0.3);
+    }
+
+    #capture::after {
+      content: "";
+      display: block;
+      width: 54px;
+      height: 54px;
+      margin: 4px auto;
+      border-radius: 50%;
+      background: #fff;
+    }
+
+    #message {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 40;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <video id="video" autoplay playsinline></video>
+    <img id="frame" src="frame.png" alt="フォトフレーム" />
+    <button id="start">カメラを起動する</button>
+    <button id="capture" style="display:none;"></button>
+    <div id="message"></div>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <script>
+    const video = document.getElementById("video");
+    const frame = document.getElementById("frame");
+    const startBtn = document.getElementById("start");
+    const captureBtn = document.getElementById("capture");
+    const canvas = document.getElementById("canvas");
+    const msg = document.getElementById("message");
+
+    function showMessage(text) {
+      msg.textContent = text;
+      msg.style.display = "block";
+      setTimeout(() => {
+        msg.style.display = "none";
+      }, 2500);
+    }
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        startBtn.style.display = "none";
+        captureBtn.style.display = "block";
+      } catch (e) {
+        console.error(e);
+        showMessage("カメラを起動できませんでした");
+      }
+    }
+
+    function drawCover(ctx, source, sw, sh, dw, dh) {
+      const scale = Math.max(dw / sw, dh / sh);
+      const nw = sw * scale;
+      const nh = sh * scale;
+      const dx = (dw - nw) / 2;
+      const dy = (dh - nh) / 2;
+      ctx.drawImage(source, dx, dy, nw, nh);
+    }
+
+    async function capturePhoto() {
+      if (!video.videoWidth || !video.videoHeight) {
+        showMessage("カメラ準備中です");
+        return;
+      }
+
+      const outputWidth = window.innerWidth;
+      const outputHeight = window.innerHeight;
+
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const ctx = canvas.getContext("2d");
+
+      drawCover(
+        ctx,
+        video,
+        video.videoWidth,
+        video.videoHeight,
+        outputWidth,
+        outputHeight
+      );
+
+      ctx.drawImage(frame, 0, 0, outputWidth, outputHeight);
+
+      canvas.toBlob(async (blob) => {
+        const fileName = `aqlub-record-${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: "image/jpeg" });
+
+        try {
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: "アクラブ学年別記録会"
+            });
+            return;
+          }
+
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 3000);
+          showMessage("写真を保存しました");
+        } catch (e) {
+          console.error(e);
+          showMessage("保存できませんでした");
+        }
+      }, "image/jpeg", 0.95);
+    }
+
+    startBtn.addEventListener("click", startCamera);
+    captureBtn.addEventListener("click", capturePhoto);
+  </script>
+</body>
+</html>
