@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>アクラブ学年別記録会 フォトフレーム</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+                   "Hiragino Kaku Gothic ProN", "Yu Gothic", Arial, sans-serif;
+      touch-action: manipulation;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /*
+      stage はJSで端末ごとの「実際に見えている領域」に合わせて
+      サイズを計算します。
+      フレーム画像そのものの縦横比を絶対に崩しません。
+    */
+    #stage {
+      position: fixed;
+      left: 50%;
+      top: max(8px, env(safe-area-inset-top));
+      transform: translateX(-50%);
+      overflow: hidden;
+      background: #000;
+      z-index: 1;
+    }
+
+    #camera {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      background: #000;
+      z-index: 1;
+    }
+
+    #frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+      z-index: 10;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    #top-message {
+      position: fixed;
+      left: 50%;
+      top: max(10px, env(safe-area-inset-top));
+      transform: translateX(-50%);
+      z-index: 1000;
+      max-width: 90vw;
+      padding: 8px 14px;
+      border-radius: 18px;
+      background: rgba(0, 0, 0, 0.62);
+      color: #fff;
+      font-size: 13px;
+      text-align: center;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    #controls {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 3000;
+      min-height: 104px;
+      padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      pointer-events: none;
+      background: linear-gradient(
+        to top,
+        rgba(0,0,0,0.66) 0%,
+        rgba(0,0,0,0.28) 55%,
+        rgba(0,0,0,0) 100%
+      );
+    }
+
+    #capture-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      pointer-events: auto;
+    }
+
+    #capture-label {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      text-shadow: 0 1px 5px rgba(0,0,0,0.9);
+    }
+
+    #capture-button {
+      width: 76px;
+      height: 76px;
+      padding: 0;
+      border: 5px solid rgba(255,255,255,0.98);
+      border-radius: 50%;
+      background: rgba(255,255,255,0.24);
+      box-shadow: 0 3px 18px rgba(0,0,0,0.55);
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    #capture-button::after {
+      content: "";
+      display: block;
+      width: 56px;
+      height: 56px;
+      margin: 5px auto;
+      border-radius: 50%;
+      background: #fff;
+    }
+
+    #start-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 5000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        max(20px, env(safe-area-inset-top))
+        20px
+        max(20px, env(safe-area-inset-bottom));
+      background: rgba(0,0,0,0.72);
+    }
+
+    #start-box {
+      width: min(88vw, 360px);
+      padding: 24px 20px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.96);
+      text-align: center;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.38);
+    }
+
+    #start-title {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #123a6b;
+    }
+
+    #start-text {
+      margin: 0 0 18px;
+      color: #333;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    #start-button {
+      border: 0;
+      border-radius: 999px;
+      padding: 15px 26px;
+      background: #0877d1;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 800;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    #status {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 7000;
+      display: none;
+      max-width: 88vw;
+      padding: 12px 17px;
+      border-radius: 18px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    #flash {
+      position: fixed;
+      inset: 0;
+      z-index: 6500;
+      background: #fff;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* 横向き端末でもフレームは全体表示します */
+    @media (orientation: landscape) {
+      #top-message {
+        font-size: 12px;
+        padding: 6px 11px;
+      }
+
+      #controls {
+        min-height: 86px;
+      }
+
+      #capture-button {
+        width: 64px;
+        height: 64px;
+      }
+
+      #capture-button::after {
+        width: 46px;
+        height: 46px;
+        margin: 4px auto;
+      }
+    }
+
+    canvas {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div id="stage">
+      <video id="camera" autoplay playsinline muted></video>
+      <img id="frame" src="./frame.png" alt="アクラブ学年別記録会フォトフレーム">
+    </div>
+
+    <div id="top-message">中央に入って撮影してください</div>
+
+    <div id="controls">
+      <div id="capture-wrap">
+        <div id="capture-label">撮影</div>
+        <button id="capture-button" type="button" aria-label="写真を撮影"></button>
+      </div>
+    </div>
+
+    <div id="start-screen">
+      <div id="start-box">
+        <div id="start-title">アクラブ学年別記録会</div>
+        <p id="start-text">
+          カメラを起動すると、記録会専用フレームで写真を撮影できます。
+        </p>
+        <button id="start-button" type="button">カメラを起動する</button>
+      </div>
+    </div>
+
+    <div id="status"></div>
+    <div id="flash"></div>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <script>
+    const stage = document.getElementById("stage");
+    const video = document.getElementById("camera");
+    const frame = document.getElementById("frame");
+    const startScreen = document.getElementById("start-screen");
+    const startButton = document.getElementById("start-button");
+    const captureWrap = document.getElementById("capture-wrap");
+    const captureButton = document.getElementById("capture-button");
+    const statusBox = document.getElementById("status");
+    const flash = document.getElementById("flash");
+    const canvas = document.getElementById("canvas");
+
+    let stream = null;
+    let capturing = false;
+    let frameRatio = 941 / 1672; // 読み込み前の予備値
+
+    function getViewportSize() {
+      const vv = window.visualViewport;
+      return {
+        width: vv ? vv.width : window.innerWidth,
+        height: vv ? vv.height : window.innerHeight
+      };
+    }
+
+    function getReservedBottom() {
+      // 撮影ボタン＋ホームインジケータ等の分を確保
+      const landscape = window.matchMedia("(orientation: landscape)").matches;
+      return landscape ? 92 : 116;
+    }
+
+    /*
+      端末の実表示領域に対して、
+      フレームの縦横比を一切崩さず、必ず全体が入る最大サイズを求めます。
+    */
+    function fitStageToScreen() {
+      const vp = getViewportSize();
+      const topSpace = 8;
+      const bottomSpace = getReservedBottom();
+
+      const maxW = Math.max(120, vp.width);
+      const maxH = Math.max(120, vp.height - topSpace - bottomSpace);
+
+      let w = maxW;
+      let h = w / frameRatio;
+
+      if (h > maxH) {
+        h = maxH;
+        w = h * frameRatio;
+      }
+
+      stage.style.width = `${Math.floor(w)}px`;
+      stage.style.height = `${Math.floor(h)}px`;
+
+      // 上部に置き、左右中央に固定
+      stage.style.top = `${topSpace}px`;
+    }
+
+    function showStatus(text, ms = 2400) {
+      statusBox.textContent = text;
+      statusBox.style.display = "block";
+
+      if (ms > 0) {
+        setTimeout(() => {
+          statusBox.style.display = "none";
+        }, ms);
+      }
+    }
+
+    function waitForVideoReady() {
+      return new Promise((resolve) => {
+        if (video.readyState >= 2 && video.videoWidth > 0) {
+          resolve();
+          return;
+        }
+
+        const done = () => {
+          video.removeEventListener("loadedmetadata", done);
+          video.removeEventListener("canplay", done);
+          resolve();
+        };
+
+        video.addEventListener("loadedmetadata", done, { once: true });
+        video.addEventListener("canplay", done, { once: true });
+      });
+    }
+
+    async function startCamera() {
+      try {
+        startButton.disabled = true;
+        startButton.textContent = "カメラを準備しています…";
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("getUserMedia unsupported");
+        }
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+
+        await waitForVideoReady();
+        await video.play();
+
+        startScreen.style.display = "none";
+        captureWrap.style.display = "flex";
+
+        fitStageToScreen();
+        setTimeout(fitStageToScreen, 150);
+        setTimeout(fitStageToScreen, 500);
+      } catch (error) {
+        console.error(error);
+        startButton.disabled = false;
+        startButton.textContent = "カメラを起動する";
+        showStatus(
+          "カメラを起動できません。ブラウザのカメラ許可をご確認ください。",
+          4200
+        );
+      }
+    }
+
+    function drawCover(ctx, source, sw, sh, dw, dh) {
+      const scale = Math.max(dw / sw, dh / sh);
+      const rw = sw * scale;
+      const rh = sh * scale;
+      const dx = (dw - rw) / 2;
+      const dy = (dh - rh) / 2;
+      ctx.drawImage(source, dx, dy, rw, rh);
+    }
+
+    /*
+      保存画像は「端末画面の比率」ではなく
+      「frame.pngそのものの比率・解像度」にします。
+      そのため、iPhoneでもAndroidでも最終写真の見た目が揃います。
+    */
+    async function capturePhoto() {
+      if (capturing) return;
+
+      if (!video.videoWidth || !video.videoHeight) {
+        showStatus("カメラの準備中です。");
+        return;
+      }
+
+      if (!frame.complete || !frame.naturalWidth || !frame.naturalHeight) {
+        showStatus("フレーム画像を読み込み中です。");
+        return;
+      }
+
+      capturing = true;
+      captureButton.disabled = true;
+
+      try {
+        flash.style.transition = "none";
+        flash.style.opacity = "0.88";
+
+        requestAnimationFrame(() => {
+          flash.style.transition = "opacity 180ms ease";
+          flash.style.opacity = "0";
+        });
+
+        const outW = frame.naturalWidth;
+        const outH = frame.naturalHeight;
+
+        canvas.width = outW;
+        canvas.height = outH;
+
+        const ctx = canvas.getContext("2d");
+
+        // カメラ映像をフレーム全面へ cover で描画
+        drawCover(
+          ctx,
+          video,
+          video.videoWidth,
+          video.videoHeight,
+          outW,
+          outH
+        );
+
+        // フレームは元画像そのまま重ねる
+        ctx.drawImage(frame, 0, 0, outW, outH);
+
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob(
+            (result) => {
+              if (result) resolve(result);
+              else reject(new Error("画像作成に失敗しました"));
+            },
+            "image/jpeg",
+            0.95
+          );
+        });
+
+        const fileName = `aqlub-record-20260923-${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: "image/jpeg" });
+
+        // iPhone / Android 共通：共有シートが使える場合はこちらを優先
+        if (
+          navigator.share &&
+          navigator.canShare &&
+          navigator.canShare({ files: [file] })
+        ) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: "アクラブ学年別記録会",
+              text: "2026年9月23日（水）"
+            });
+          } catch (error) {
+            if (!error || error.name !== "AbortError") {
+              throw error;
+            }
+          }
+          return;
+        }
+
+        // 共有機能がないブラウザではダウンロード
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        showStatus("写真を保存しました");
+      } catch (error) {
+        console.error(error);
+        showStatus("撮影できませんでした。もう一度お試しください。", 3200);
+      } finally {
+        capturing = false;
+        captureButton.disabled = false;
+      }
+    }
+
+    frame.addEventListener("load", () => {
+      if (frame.naturalWidth && frame.naturalHeight) {
+        frameRatio = frame.naturalWidth / frame.naturalHeight;
+      }
+      fitStageToScreen();
+    });
+
+    startButton.addEventListener("click", startCamera);
+    captureButton.addEventListener("click", capturePhoto);
+
+    window.addEventListener("resize", fitStageToScreen);
+    window.addEventListener("orientationchange", () => {
+      setTimeout(fitStageToScreen, 150);
+      setTimeout(fitStageToScreen, 450);
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", fitStageToScreen);
+      window.visualViewport.addEventListener("scroll", fitStageToScreen);
+    }
+
+    fitStageToScreen();
+  </script>
+</body>
+</html>
